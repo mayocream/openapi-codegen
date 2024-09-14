@@ -29,6 +29,8 @@ type Schema struct {
 	Example     string
 	// Object
 	Properties []Schema
+	// Enum
+	EnumValues []any
 }
 
 // FileData represents all structs for the generated Go file
@@ -67,6 +69,9 @@ func generateSchema(schemaDef *openapi3.Schema, schemaName string, spec *openapi
 				additionalSchemas = append(additionalSchemas, nestedSchemas...)
 			}
 		}
+	} else if schemaDef.Enum != nil {
+		schema.Type = "enum"
+		schema.EnumValues = schemaDef.Enum
 	} else {
 		var nestedSchemas []Schema
 		schema.Type, nestedSchemas, _ = resolveGoType(&openapi3.SchemaRef{Value: schemaDef}, schemaName, spec)
@@ -90,7 +95,6 @@ func resolveGoType(schemaRef *openapi3.SchemaRef, parentName string, spec *opena
 			if schemaRef.Value.Format == "date-time" {
 				return "time.Time", nil, nil
 			}
-			// TODO: enum type
 			return "string", nil, nil
 		case "integer":
 			return "int", nil, nil

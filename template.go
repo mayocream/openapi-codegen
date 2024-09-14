@@ -1,12 +1,14 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
+	"bytes"
 	"fmt"
 	"go/format"
 	"strings"
 	"text/template"
+
+	"github.com/samber/lo"
 )
 
 //go:embed templates/schema.tpl
@@ -17,6 +19,7 @@ var (
 		"splitLines": func(s string) []string {
 			return strings.Split(s, "\n")
 		},
+		"pascalCase": lo.PascalCase,
 	}).Parse(schemaTplContent))
 )
 

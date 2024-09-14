@@ -30,10 +30,9 @@ type {{ .Name }} {{ .Type }}
 {{ template "description" .Description }}
 {{- end }}
 type {{ .Name }} string
-
 const (
-{{- range .Values }}
-	{{ . }} {{ $.Name }} = "{{ . }}"
+{{- range .EnumValues }}
+	{{ $.Name }}{{ . | pascalCase }} {{ $.Name }} = "{{ . }}"
 {{- end }}
 )
 {{ end }}
