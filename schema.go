@@ -153,20 +153,3 @@ func generate(spec *openapi3.T, packageName, outputFilePath string) error {
 
 	return os.WriteFile(outputFilePath, []byte(code), 0644)
 }
-
-func main() {
-	// Parse the OpenAPI spec
-	spec, err := parseOpenAPISpec("testdata/openapi.yaml")
-	if err != nil {
-		fmt.Printf("Error parsing OpenAPI spec: %v\n", err)
-		return
-	}
-
-	// Generate Go code from the spec
-	err = generate(spec, "testdata", "testdata/generated.go")
-	if err != nil {
-		fmt.Printf("Error generating code: %v\n", err)
-	} else {
-		fmt.Println("Code generated successfully!")
-	}
-}
