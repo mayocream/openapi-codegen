@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	specFile = flag.StringP("spec", "i", "openapi.yaml", "Path to OpenAPI spec file")
-	outputPath = flag.StringP("output", "o", ".", "Output path for generated Go file")
+	specFile    = flag.StringP("spec", "i", "openapi.yaml", "Path to OpenAPI spec file")
+	outputPath  = flag.StringP("output", "o", ".", "Output path for generated Go file")
 	packageName = flag.StringP("package", "p", "api", "Go package name")
 )
 
@@ -25,7 +25,7 @@ func main() {
 	}
 
 	// Generate Go code from the spec
-	err = generate(spec, *packageName, *outputPath + "/schema.gen.go")
+	err = generate(spec, *packageName, *outputPath+"/schema.gen.go")
 	if err != nil {
 		fmt.Printf("Error generating code: %v\n", err)
 	} else {
