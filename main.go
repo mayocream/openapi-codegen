@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	flag "github.com/spf13/pflag"
 )
 
@@ -25,10 +28,30 @@ func main() {
 	}
 
 	// Generate Go code from the spec
-	err = generate(spec, *packageName, *outputPath+"/schema.gen.go")
+	err = generate(spec, *packageName, *outputPath)
 	if err != nil {
 		fmt.Printf("Error generating code: %v\n", err)
 	} else {
 		fmt.Println("Code generated successfully!")
 	}
+}
+
+// Generate Go code from the OpenAPI spec
+func generate(spec *openapi3.T, packageName, outputFilePath string) error {
+	code, err := generateComponents(spec, packageName)
+	if err != nil {
+		return fmt.Errorf("error generating components: %w", err)
+	}
+
+	err = os.WriteFile(path.Join(outputFilePath, "schema.gen.go"), []byte(code), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing to file: %w", err)
+	}
+
+	code, err = generateClient(spec, packageName)
+	if err != nil {
+		return fmt.Errorf("error generating client: %w", err)
+	}
+
+	return os.WriteFile(path.Join(outputFilePath, "client.gen.go"), []byte(code), 0644)
 }

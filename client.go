@@ -1,87 +1,44 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
-	"go/format"
-	"log"
 	"strings"
-	"text/template"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/samber/lo"
 )
 
-const clientTemplate = `package vrchatgo
-
-import (
-	"fmt"
-	"net/http"
-	"encoding/json"
-
-	"github.com/go-resty/resty/v2"
-)
-
-type Client struct {
-	client *resty.Client
+type ParameterInfo struct {
+	Name     string
+	Type     string
+	Required bool
+	In       string
 }
-
-func NewClient() *Client {
-	return &Client{
-		client: resty.New().SetBaseURL("https://vrchatapi.com/api/1"),
-	}
-}
-
-{{range .}}
-{{if .HasBody}}
-func (c *Client) {{.MethodName}}({{.Params}}) ({{.ResponseType}}, error) {
-	resp, err := c.client.R().
-		SetBody({{.RequestBody}}).
-		{{.Method}}("{{.Path}}")
-	if err != nil {
-		return nil, err
-	}
-	if resp.IsError() {
-		return nil, fmt.Errorf("API error: %v", resp.Status())
-	}
-	var result {{.ResponseType}}
-	err = json.Unmarshal(resp.Body(), &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-{{else}}
-func (c *Client) {{.MethodName}}({{.Params}}) ({{.ResponseType}}, error) {
-	resp, err := c.client.R().
-		{{.Method}}("{{.Path}}")
-	if err != nil {
-		return nil, err
-	}
-	if resp.IsError() {
-		return nil, fmt.Errorf("API error: %v", resp.Status())
-	}
-	var result {{.ResponseType}}
-	err = json.Unmarshal(resp.Body(), &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-{{end}}
-{{end}}
-`
 
 type MethodInfo struct {
-	MethodName   string
-	Params       string
-	Method       string
-	Path         string
-	ResponseType string
-	HasBody      bool
-	RequestBody  string
+	MethodName      string
+	ParamsStruct    string
+	Method          string
+	Path            string
+	ResponseType    string
+	HasBody         bool
+	RequestBody     string
+	Parameters      []ParameterInfo
+	QueryParams     []ParameterInfo
+	PathParams      []ParameterInfo
+	HeaderParams    []ParameterInfo
+	HasQueryParams  bool
+	HasPathParams   bool
+	HasHeaderParams bool
 }
 
-func GenerateClient(spec *openapi3.T) (string, error) {
+type ClientFileData struct {
+	PackageName string
+	Methods     []MethodInfo
+}
+
+func generateClient(spec *openapi3.T, packageName string) (string, error) {
 	var methods []MethodInfo
 
 	for _, path := range spec.Paths.InMatchingOrder() {
@@ -89,40 +46,68 @@ func GenerateClient(spec *openapi3.T) (string, error) {
 		for method, operation := range pathItem.Operations() {
 			methodInfo := MethodInfo{
 				MethodName:   lo.PascalCase(operation.OperationID),
-				Method:       lo.Capitalize(method),
+				Method:       strings.ToUpper(method),
 				Path:         path,
 				ResponseType: getResponseType(operation.Responses),
 				HasBody:      hasRequestBody(operation.RequestBody),
 			}
 
-			methodInfo.Params = generateParams(operation.Parameters, methodInfo.HasBody)
+			methodInfo.Parameters = generateParameters(operation.Parameters)
+			methodInfo.QueryParams = filterParameters(methodInfo.Parameters, "query")
+			methodInfo.PathParams = filterParameters(methodInfo.Parameters, "path")
+			methodInfo.HeaderParams = filterParameters(methodInfo.Parameters, "header")
+			methodInfo.HasQueryParams = len(methodInfo.QueryParams) > 0
+			methodInfo.HasPathParams = len(methodInfo.PathParams) > 0
+			methodInfo.HasHeaderParams = len(methodInfo.HeaderParams) > 0
+
+			methodInfo.ParamsStruct = generateParamsStruct(methodInfo)
+
 			if methodInfo.HasBody {
-				methodInfo.RequestBody = "requestBody"
+				methodInfo.RequestBody = getRequestBodyType(operation.RequestBody)
 			}
 
 			methods = append(methods, methodInfo)
 		}
 	}
 
-	tmpl, err := template.New("client").Parse(clientTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
+	clientData := ClientFileData{
+		PackageName: packageName,
+		Methods:     methods,
 	}
 
-	var buf strings.Builder
-	err = tmpl.Execute(&buf, methods)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
+	return applyClientTemplate(clientData)
+}
+
+func generateParameters(parameters openapi3.Parameters) []ParameterInfo {
+	var params []ParameterInfo
+	for _, param := range parameters {
+		if param.Value != nil {
+			params = append(params, ParameterInfo{
+				Name:     param.Value.Name,
+				Type:     getSchemaType(param.Value.Schema),
+				Required: param.Value.Required,
+				In:       param.Value.In,
+			})
+		}
 	}
+	return params
+}
 
-	return buf.String(), nil
+func filterParameters(params []ParameterInfo, in string) []ParameterInfo {
+	return lo.Filter(params, func(p ParameterInfo, _ int) bool {
+		return p.In == in
+	})
+}
 
-	formattedCode, err := format.Source([]byte(buf.String()))
-	if err != nil {
-		return "", fmt.Errorf("failed to format code: %w", err)
+func generateParamsStruct(methodInfo MethodInfo) string {
+	var fields []string
+	for _, param := range methodInfo.Parameters {
+		fields = append(fields, fmt.Sprintf("%s %s `json:\"%s\"`", lo.PascalCase(param.Name), param.Type, param.Name))
 	}
-
-	return string(formattedCode), nil
+	if methodInfo.HasBody {
+		fields = append(fields, fmt.Sprintf("RequestBody %s `json:\"requestBody\"`", methodInfo.RequestBody))
+	}
+	return fmt.Sprintf("type %sParams struct {\n\t%s\n}", methodInfo.MethodName, strings.Join(fields, "\n\t"))
 }
 
 func getResponseType(responses *openapi3.Responses) string {
@@ -130,7 +115,7 @@ func getResponseType(responses *openapi3.Responses) string {
 		if response.Value != nil && response.Value.Content != nil {
 			for mediaType, mediaTypeValue := range response.Value.Content {
 				if mediaType == "application/json" && mediaTypeValue.Schema != nil {
-					return getSchemaType(mediaTypeValue.Schema.Value)
+					return getSchemaType(mediaTypeValue.Schema)
 				}
 			}
 		}
@@ -138,7 +123,12 @@ func getResponseType(responses *openapi3.Responses) string {
 	return "interface{}"
 }
 
-func getSchemaType(schema *openapi3.Schema) string {
+func getSchemaType(schemaRef *openapi3.SchemaRef) string {
+	if schemaRef.Ref != "" {
+		return extractTypeNameFromRef(schemaRef.Ref)
+	}
+
+	schema := schemaRef.Value
 	if schema.Type == nil {
 		return "interface{}"
 	}
@@ -148,7 +138,7 @@ func getSchemaType(schema *openapi3.Schema) string {
 		return "map[string]interface{}"
 	case "array":
 		if schema.Items != nil {
-			return "[]" + getSchemaType(schema.Items.Value)
+			return "[]" + getSchemaType(schema.Items)
 		}
 		return "[]interface{}"
 	case "string":
@@ -168,29 +158,13 @@ func hasRequestBody(requestBody *openapi3.RequestBodyRef) bool {
 	return requestBody != nil && requestBody.Value != nil
 }
 
-func generateParams(parameters openapi3.Parameters, hasBody bool) string {
-	var params []string
-	for _, param := range parameters {
-		if param.Value != nil {
-			paramName := param.Value.Name
-			paramType := getSchemaType(param.Value.Schema.Value)
-			params = append(params, fmt.Sprintf("%s %s", paramName, paramType))
+func getRequestBodyType(requestBody *openapi3.RequestBodyRef) string {
+	if requestBody != nil && requestBody.Value != nil {
+		for mediaType, mediaTypeValue := range requestBody.Value.Content {
+			if mediaType == "application/json" && mediaTypeValue.Schema != nil {
+				return getSchemaType(mediaTypeValue.Schema)
+			}
 		}
 	}
-	if hasBody {
-		params = append(params, "requestBody interface{}")
-	}
-	return strings.Join(params, ", ")
-}
-
-func GenerateVRChatClient(specFile string) (string, error) {
-	loader := openapi3.NewLoader()
-	spec, err := loader.LoadFromFile(specFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to load spec: %w", err)
-	}
-
-	log.Printf("loaded spec: %v", spec.Info.Title)
-
-	return GenerateClient(spec)
+	return "interface{}"
 }

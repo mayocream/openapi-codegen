@@ -1,0 +1,85 @@
+package {{ .PackageName }}
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/go-resty/resty/v2"
+)
+
+type Client struct {
+	BaseURL string
+	client  *resty.Client
+}
+
+func NewClient(baseURL string) *Client {
+	return &Client{
+		BaseURL: baseURL,
+		client:  resty.New(),
+	}
+}
+
+{{ range .Methods }}
+{{ .ParamsStruct }}
+
+func (c *Client) {{ .MethodName }}(params {{ .MethodName }}Params) ({{ .ResponseType }}, error) {
+	path := "{{ .Path }}"
+	{{- if .HasPathParams }}
+	// Replace path parameters
+	{{- range .PathParams }}
+	path = strings.Replace(path, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", params.{{ .Name }}), -1)
+	{{- end }}
+	{{- end }}
+
+	// Create request
+	req := c.client.R()
+
+	{{- if .HasQueryParams }}
+	// Add query parameters
+	{{- range .QueryParams }}
+	{{- if .Required }}
+	req.SetQueryParam("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name | pascalCase }}))
+	{{- else }}
+	if params.{{ .Name | pascalCase }} != nil {
+		req.SetQueryParam("{{ .Name }}", fmt.Sprintf("%v", *params.{{ .Name | pascalCase }}))
+	}
+	{{- end }}
+	{{- end }}
+	{{- end }}
+
+	{{- if .HasHeaderParams }}
+	// Set header parameters
+	{{- range .HeaderParams }}
+	{{- if .Required }}
+	req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
+	{{- else }}
+	if params.{{ .Name }} != nil {
+		req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", *params.{{ .Name }}))
+	}
+	{{- end }}
+	{{- end }}
+	{{- end }}
+
+	{{- if .HasBody }}
+	// Set request body
+	req.SetBody(params.RequestBody)
+	{{- end }}
+
+	// Set response object
+	var result {{ .ResponseType }}
+	req.SetResult(&result)
+
+	// Send request
+	resp, err := req.{{ .Method }}(c.BaseURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("error sending request: %w", err)
+	}
+
+	// Check for successful status code
+	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode(), resp.String())
+	}
+
+	return result, nil
+}
+{{ end }}

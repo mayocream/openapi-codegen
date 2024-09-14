@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -146,14 +145,4 @@ func generateComponents(spec *openapi3.T, packageName string) (string, error) {
 	}
 
 	return applySchemaTemplate(fileData)
-}
-
-// Generate Go code from the OpenAPI spec
-func generate(spec *openapi3.T, packageName, outputFilePath string) error {
-	code, err := generateComponents(spec, packageName)
-	if err != nil {
-		return fmt.Errorf("error generating components: %w", err)
-	}
-
-	return os.WriteFile(outputFilePath, []byte(code), 0644)
 }
