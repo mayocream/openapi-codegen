@@ -5,6 +5,7 @@ go 1.23.1
 require (
 	github.com/getkin/kin-openapi v0.127.0
 	github.com/samber/lo v1.47.0
+	github.com/spf13/pflag v1.0.5
 )
 
 require (

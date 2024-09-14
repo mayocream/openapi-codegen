@@ -1,14 +1,15 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+
+	flag "github.com/spf13/pflag"
 )
 
 var (
-	specFile = flag.String("spec", "openapi.yaml", "Path to OpenAPI spec file")
-	outputPath = flag.String("output", ".", "Output path for generated Go file")
-	packageName = flag.String("package", "api", "Go package name")
+	specFile = flag.StringP("spec", "i", "openapi.yaml", "Path to OpenAPI spec file")
+	outputPath = flag.StringP("output", "o", ".", "Output path for generated Go file")
+	packageName = flag.StringP("package", "p", "api", "Go package name")
 )
 
 func init() {
