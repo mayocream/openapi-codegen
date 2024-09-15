@@ -118,6 +118,7 @@ func generateRequests(pathItem *openapi3.PathItem, path string) ([]*Request, err
 			if p := findParameterByRef(param.Ref); p != nil {
 				schema, _, _ := generateSchema(p.Value.Schema, p.Value.Name)
                 schema.In = p.Value.In
+				schema.JSONName = p.Value.Name
 				pathSchemas = append(pathSchemas, schema)
 			}
 		}
@@ -144,10 +145,19 @@ func generateRequests(pathItem *openapi3.PathItem, path string) ([]*Request, err
                 if p := findParameterByRef(param.Ref); p != nil {
                     schema, _, _ := generateSchema(p.Value.Schema, p.Value.Name)
                     schema.In = p.Value.In
+					schema.JSONName = p.Value.Name
                     request.Parameters = append(request.Parameters, schema)
                 }
             }
         }
+
+		// Add response
+		if response := operation.Responses.Status(200); response != nil && response.Ref != "" {
+			schema := &Schema{
+				Name: extractTypeNameFromRef(response.Ref),
+			}
+			request.Response = schema
+		}
 
         requests = append(requests, request)
 	}

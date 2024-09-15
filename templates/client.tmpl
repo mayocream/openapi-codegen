@@ -34,7 +34,7 @@ type {{ .Name }}Params struct {
 	{{- end }}
 }
 {{- end }}
-func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end }}{{ if .Body }}, body {{ .Body.Name }} {{ end }}) ({{ if .Response }}{{ .Response.Name }}, {{ end }}error) {
+func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end }}{{ if .Body }}, body {{ .Body.Name }} {{ end }}) ({{ if .Response }}*{{ .Response.Name }}, {{ end }}error) {
 	path := "{{ .Path }}"
 
 	{{- if .Parameters }}
@@ -42,10 +42,10 @@ func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end 
 	queryParams := make(map[string]string)
 	{{- range .Parameters }}
 	{{- if eq .In "path" }}
-	path = strings.ReplaceAll(path, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
+	path = strings.ReplaceAll(path, "{{ printf "{%s}" .JSONName }}", fmt.Sprintf("%v", params.{{ .Name }}))
 	{{- else if eq .In "query" }}
 	if lo.IsNotEmpty(params.{{ .Name }}) {
-		queryParams["{{ .Name }}"] = fmt.Sprintf("%v", params.{{ .Name }})
+		queryParams["{{ .JSONName }}"] = fmt.Sprintf("%v", params.{{ .Name }})
 	}
 	{{- end }}
 	{{- end }}
@@ -62,7 +62,7 @@ func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end 
 	{{- if eq .In "header" }}
 	// Set header parameters
 	if lo.IsNotEmpty(params.{{ .Name }}) {
-		req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
+		req.SetHeader("{{ .JSONName }}", fmt.Sprintf("%v", params.{{ .Name }}))
 	}
 	{{- end }}
 	{{- end }}
@@ -82,16 +82,16 @@ func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end 
 	// Send request
 	resp, err := req.{{ .Method }}(path)
 	if err != nil {
-		return {{ if .Response }}{{ .Response.Name }}{}, {{ end }}fmt.Errorf("error sending request: %w", err)
+		return {{ if .Response }}nil, {{ end }}fmt.Errorf("error sending request: %w", err)
 	}
 
 	// Check for successful status code
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return {{ if .Response }}{{ .Response.Name }}{}, {{ end }}fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode(), resp.String())
+		return {{ if .Response }}nil, {{ end }}fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode(), resp.String())
 	}
 
 	{{- if .Response }}
-	return result, nil
+	return &result, nil
 	{{- else }}
 	return nil
 	{{- end }}

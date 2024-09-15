@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"text/template"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	flag "github.com/spf13/pflag"
 )
 
 var (
-	specFile    = flag.StringP("spec", "i", "openapi.yaml", "Path to OpenAPI spec file")
-	outputPath  = flag.StringP("output", "o", ".", "Output path for generated Go file")
-	packageName = flag.StringP("package", "p", "api", "Go package name")
+	specFile      = flag.StringP("spec", "i", "openapi.yaml", "Path to OpenAPI spec file")
+	outputPath    = flag.StringP("output", "o", ".", "Output path for generated Go file")
+	packageName   = flag.StringP("package", "p", "api", "Go package name")
+	clientTplFile = flag.StringP("client-tpl", "t", "", "Path to client template file, e.g. client.tmpl")
 )
 
 func init() {
@@ -46,6 +48,19 @@ func generate(spec *openapi3.T, packageName, outputFilePath string) error {
 	err = os.WriteFile(path.Join(outputFilePath, "schema.gen.go"), []byte(code), 0644)
 	if err != nil {
 		return fmt.Errorf("error writing to file: %w", err)
+	}
+
+	// custom client template
+	if *clientTplFile != "" {
+		fmt.Println("Using custom client template: ", *clientTplFile)
+		f, err := os.ReadFile(*clientTplFile)
+		if err != nil {
+			return fmt.Errorf("error reading client template file: %w", err)
+		}
+		clientTplContent = string(f)
+		clientTpl = template.Must(template.New("client").Funcs(funcMap).Parse(clientTplContent))
+	} else {
+		fmt.Println("Using default client template: ", "https://github.com/mayocream/openapi-codegen/blob/main/templates/client.tmpl")
 	}
 
 	code, err = generateClient(spec, packageName)
