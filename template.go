@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"fmt"
 	"go/format"
-	"os"
 	"strings"
 	"text/template"
 
@@ -16,10 +15,11 @@ import (
 var schemaTplContent string
 
 var schemaTpl = template.Must(template.New("schema").Funcs(template.FuncMap{
-	"splitLines": func(s string) []string {
-		return strings.Split(s, "\n")
-	},
 	"pascalCase": lo.PascalCase,
+	"goComment": func(name string, desc string) string {
+		desc = strings.ReplaceAll(desc, "\n", "\n// ")
+		return fmt.Sprintf("// %s %s", name, desc)
+	},
 }).Parse(schemaTplContent))
 
 //go:embed templates/client.tmpl
@@ -53,8 +53,6 @@ func applyClientTemplate(data any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	os.WriteFile("testdata/client.gen.go", buf.Bytes(), 0644)
 
 	// Format the generated code using go/format
 	formattedCode, err := format.Source(buf.Bytes())

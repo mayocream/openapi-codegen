@@ -9,34 +9,6 @@ import (
 	"github.com/samber/lo"
 )
 
-type ParameterInfo struct {
-	Name     string
-	Type     string
-	Required bool
-	In       string
-}
-
-type MethodInfo struct {
-	MethodName      string
-	ParamsStruct    string
-	Method          string
-	Path            string
-	ResponseType    string
-	HasBody         bool
-	RequestBody     string
-	Parameters      []ParameterInfo
-	QueryParams     []ParameterInfo
-	PathParams      []ParameterInfo
-	HeaderParams    []ParameterInfo
-	HasQueryParams  bool
-	HasPathParams   bool
-	HasHeaderParams bool
-}
-
-type ClientFileData struct {
-	PackageName string
-	Methods     []MethodInfo
-}
 
 func generateClient(spec *openapi3.T, packageName string) (string, error) {
 	var methods []MethodInfo

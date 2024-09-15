@@ -1,21 +1,14 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/samber/lo"
+	"gopkg.in/yaml.v3"
 )
 
-// Load and parse OpenAPI 3.0 spec
-func parseOpenAPISpec(filePath string) (*openapi3.T, error) {
-	loader := openapi3.NewLoader()
-	spec, err := loader.LoadFromFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
-	}
-	return spec, nil
+// Doc represents a parsed OpenAPI 3.0 spec
+type Doc struct {
+	Raw  *yaml.Node
+	Spec openapi3.T
 }
 
 // Schema represents a single schema to be generated
@@ -36,113 +29,34 @@ type Schema struct {
 type FileData struct {
 	PackageName string
 	Schemas     []Schema
+	Methods     []MethodInfo
 }
 
-// Generate Go type for a single schema
-func generateSchema(schemaDef *openapi3.Schema, schemaName string, spec *openapi3.T) (Schema, []Schema, error) {
-	schema := Schema{
-		Name: lo.PascalCase(schemaName),
-	}
-
-	var additionalSchemas []Schema
-
-	if schemaDef == nil {
-		return schema, additionalSchemas, fmt.Errorf("schema is nil")
-	}
-
-	schema.Description = schemaDef.Description
-
-	if schemaDef.Type.Is("object") {
-		schema.Type = "struct"
-		for propName, propSchema := range schemaDef.Properties {
-			fieldName := lo.PascalCase(propName)
-			fieldType, nestedSchemas, err := resolveGoType(propSchema, fieldName, spec)
-			if err == nil {
-				schema.Properties = append(schema.Properties, Schema{
-					Name:        fieldName,
-					Type:        fieldType,
-					JSONName:    propName,
-					Description: propSchema.Value.Description,
-					OmitEmpty:   !lo.Contains(schemaDef.Required, propName),
-				})
-				additionalSchemas = append(additionalSchemas, nestedSchemas...)
-			}
-		}
-	} else if schemaDef.Enum != nil {
-		schema.Type = "enum"
-		schema.EnumValues = schemaDef.Enum
-	} else {
-		var nestedSchemas []Schema
-		schema.Type, nestedSchemas, _ = resolveGoType(&openapi3.SchemaRef{Value: schemaDef}, schemaName, spec)
-		additionalSchemas = append(additionalSchemas, nestedSchemas...)
-	}
-
-	return schema, additionalSchemas, nil
+type ParameterInfo struct {
+	Name     string
+	Type     string
+	Required bool
+	In       string
 }
 
-// Resolve Go type for a given schema reference or inline schema
-func resolveGoType(schemaRef *openapi3.SchemaRef, parentName string, spec *openapi3.T) (string, []Schema, error) {
-	if schemaRef.Ref != "" {
-		return extractTypeNameFromRef(schemaRef.Ref), nil, nil
-	}
-
-	var additionalSchemas []Schema
-
-	if schemaRef.Value.Type != nil {
-		switch (*schemaRef.Value.Type)[0] {
-		case "string":
-			if schemaRef.Value.Format == "date-time" {
-				return "time.Time", nil, nil
-			}
-			return "string", nil, nil
-		case "integer":
-			return "int", nil, nil
-		case "number":
-			return "float64", nil, nil
-		case "boolean":
-			return "bool", nil, nil
-		case "array":
-			itemType, nestedSchemas, err := resolveGoType(schemaRef.Value.Items, parentName+"Item", spec)
-			if err != nil {
-				return "", nil, err
-			}
-			additionalSchemas = append(additionalSchemas, nestedSchemas...)
-			return "[]" + itemType, additionalSchemas, nil
-		case "object":
-			nestedSchemaName := parentName + "Nested"
-			nestedSchema, nestedSchemas, err := generateSchema(schemaRef.Value, nestedSchemaName, spec)
-			if err != nil {
-				return "", nil, err
-			}
-			additionalSchemas = append(additionalSchemas, nestedSchema)
-			additionalSchemas = append(additionalSchemas, nestedSchemas...)
-			return nestedSchemaName, additionalSchemas, nil
-		}
-	}
-
-	return "any", nil, nil
+type MethodInfo struct {
+	MethodName      string
+	ParamsStruct    string
+	Method          string
+	Path            string
+	ResponseType    string
+	HasBody         bool
+	RequestBody     string
+	Parameters      []ParameterInfo
+	QueryParams     []ParameterInfo
+	PathParams      []ParameterInfo
+	HeaderParams    []ParameterInfo
+	HasQueryParams  bool
+	HasPathParams   bool
+	HasHeaderParams bool
 }
 
-// Extract the Go type name from an OpenAPI $ref (reference) string
-func extractTypeNameFromRef(ref string) string {
-	parts := strings.Split(ref, "/")
-	return lo.PascalCase(parts[len(parts)-1])
-}
-
-// Generate Go code for all components
-func generateComponents(spec *openapi3.T, packageName string) (string, error) {
-	fileData := FileData{
-		PackageName: packageName,
-		Schemas:     []Schema{},
-	}
-
-	for name, schemaDef := range spec.Components.Schemas {
-		schema, additionalSchemas, err := generateSchema(schemaDef.Value, name, spec)
-		if err == nil {
-			fileData.Schemas = append(fileData.Schemas, schema)
-			fileData.Schemas = append(fileData.Schemas, additionalSchemas...)
-		}
-	}
-
-	return applySchemaTemplate(fileData)
+type ClientFileData struct {
+	PackageName string
+	Methods     []MethodInfo
 }

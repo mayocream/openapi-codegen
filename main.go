@@ -21,7 +21,7 @@ func init() {
 
 func main() {
 	// Parse the OpenAPI spec
-	spec, err := parseOpenAPISpec(*specFile)
+	_, spec, err := parseOpenAPISpec(*specFile)
 	if err != nil {
 		fmt.Printf("Error parsing OpenAPI spec: %v\n", err)
 		return

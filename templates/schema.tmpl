@@ -2,62 +2,48 @@
 package {{ .PackageName }}
 
 import (
-	"encoding/json"
-	"time"
+    "time"
 )
 
 {{ range .Schemas }}
-{{- if eq .Type "struct" }}
-{{ template "struct" . }}
-{{- else if eq .Type "enum" }}
-{{ template "enum" . }}
-{{- else }}
-{{ template "type" . }}
-{{- end }}
+{{ template "schema" . }}
+{{ end }}
 {{ end }}
 
-{{ end }}
-
-{{ define "type" }}
-{{- if .Description }}
-{{ template "description" .Description }}
-{{- end }}
-type {{ .Name }} {{ .Type }}
-{{ end }}
-
-{{ define "enum" }}
-{{- if .Description }}
-{{ template "description" .Description }}
-{{- end }}
-type {{ .Name }} string
-const (
-{{- range .EnumValues }}
-	{{ $.Name }}{{ . | pascalCase }} {{ $.Name }} = "{{ . }}"
-{{- end }}
-)
-{{ end }}
-
-{{ define "struct" }}
+{{ define "schema" }}
 {{- if .Description -}}
-{{ template "description" .Description }}
+{{ template "description" . }}
 {{- end -}}
-type {{ .Name }} struct {
-{{- range .Properties }}
-{{- template "field" . -}}
-{{ end -}}
-}
+type {{ .Name }} {{ if eq .Type "struct" }}struct {
+    {{- range .Properties -}}
+    {{ template "field" . }}
+    {{- end -}}
+}{{- else if eq .Type "enum" -}}string
+
+const (
+    {{- range .EnumValues }}
+    {{ $.Name }}{{ . | pascalCase }} {{ $.Name }} = "{{ . }}"
+    {{- end -}}
+){{- else -}}{{ .Type }}{{- end -}}
 {{ end }}
 
 {{ define "field" }}
 {{- if .Description -}}
-	{{ template "description" .Description }}
+    {{ template "description" . }}
 {{- end -}}
-	{{ .Name }} {{ .Type }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+{{- if eq .Type "struct" }}
+    {{ .Name }} struct {
+        {{- range .Properties -}}
+        {{ template "field" . }}
+        {{- end -}}
+    } `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+{{- else if eq .Type "array" -}}
+    {{ .Name }} []{{ .ItemType }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+{{- else -}}
+    {{ .Name }} {{ .Type }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+{{- end }}
 {{ end }}
 
 {{ define "description" }}
-{{- $lines := splitLines . -}}
-{{- range $index, $line := $lines }}
-// {{ $line }}
-{{- end }}
+{{ goComment .Name .Description }}
 {{ end }}
