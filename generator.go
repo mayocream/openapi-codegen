@@ -10,12 +10,12 @@ import (
 )
 
 // generateSchema generates Go types from OpenAPI schema
-func generateSchema(schemaRef *openapi3.SchemaRef, schemaName string) (Schema, []Schema, error) {
+func generateSchema(schemaRef *openapi3.SchemaRef, schemaName string) (*Schema, []*Schema, error) {
     if schemaRef == nil || schemaRef.Value == nil {
-        return Schema{}, nil, fmt.Errorf("schema is nil")
+        return nil, nil, fmt.Errorf("schema is nil")
     }
 
-    schema := Schema{
+    schema := &Schema{
         Name:        lo.PascalCase(schemaName),
         Description: schemaRef.Value.Description,
     }
@@ -25,12 +25,12 @@ func generateSchema(schemaRef *openapi3.SchemaRef, schemaName string) (Schema, [
         return schema, nil, nil
     }
 
-    var additionalSchemas []Schema
+    var additionalSchemas []*Schema
 
     switch {
     case schemaRef.Value.Type.Is(openapi3.TypeObject) && schemaRef.Value.Properties != nil:
         schema.Type = "struct"
-        schema.Properties = lo.MapToSlice(schemaRef.Value.Properties, func(propName string, propSchema *openapi3.SchemaRef) Schema {
+        schema.Properties = lo.MapToSlice(schemaRef.Value.Properties, func(propName string, propSchema *openapi3.SchemaRef) *Schema {
             fieldName := lo.PascalCase(propName)
             fieldSchema, nestedSchemas, _ := generateSchema(propSchema, fieldName)
             additionalSchemas = append(additionalSchemas, nestedSchemas...)
@@ -40,7 +40,7 @@ func generateSchema(schemaRef *openapi3.SchemaRef, schemaName string) (Schema, [
             return fieldSchema
         })
 		// Sort properties by name
-		slices.SortStableFunc(schema.Properties, func(a, b Schema) int {
+		slices.SortStableFunc(schema.Properties, func(a, b *Schema) int {
 			return strings.Compare(a.Name, b.Name)
 		})
 
@@ -76,6 +76,25 @@ func generateSchema(schemaRef *openapi3.SchemaRef, schemaName string) (Schema, [
     return schema, additionalSchemas, nil
 }
 
+// generateResponse generates Go types from OpenAPI response
+func generateResponse(response *openapi3.ResponseRef, schemaName string) (*Schema, []*Schema, error) {
+    if response == nil || response.Value == nil {
+        return nil, nil, fmt.Errorf("response is nil")
+    }
+
+    for mediaType, mediaTypeValue := range response.Value.Content {
+        if mediaType == "application/json" && mediaTypeValue.Schema != nil {
+            return generateSchema(mediaTypeValue.Schema, schemaName)
+        }
+    }
+
+    return &Schema{
+        Name: lo.PascalCase(schemaName),
+        Type: "any",
+        Description: *response.Value.Description,
+    }, nil, nil
+}
+
 func extractTypeNameFromRef(ref string) string {
 	return lo.PascalCase(lo.LastOrEmpty(strings.Split(ref, "/")))
 }
@@ -84,25 +103,44 @@ func extractTypeNameFromRef(ref string) string {
 func generateComponents(spec *openapi3.T, packageName string) (string, error) {
 	fileData := FileData{
 		PackageName: packageName,
-		Schemas:     []Schema{},
+		Schemas:     make([]*Schema, 0),
 	}
 
-	// ordering keys
-	keys := getYAMLNodeKeys("components.schemas")
-	if keys == nil {
-		return "", fmt.Errorf("failed to get components.schemas keys")
-	}
+    // Components.Schemas
+    {
+	    // ordering keys
+        keys := getYAMLNodeKeys("components.schemas")
+        if keys == nil {
+            return "", fmt.Errorf("failed to get components.schemas keys")
+        }
 
-	for _, key := range keys {
-		schemaRef := spec.Components.Schemas[key]
-		schema, additionalSchemas, err := generateSchema(schemaRef, key)
-		if err != nil {
-			return "", fmt.Errorf("failed to generate schema for %s: %w", key, err)
-		}
-		fileData.Schemas = append(fileData.Schemas, schema)
-		fileData.Schemas = append(fileData.Schemas, additionalSchemas...)
-	}
+        for _, key := range keys {
+            ref := spec.Components.Schemas[key]
+            schema, additionalSchemas, err := generateSchema(ref, key)
+            if err != nil {
+                return "", fmt.Errorf("failed to generate schema for %s: %w", key, err)
+            }
+            fileData.Schemas = append(fileData.Schemas, schema)
+            fileData.Schemas = append(fileData.Schemas, additionalSchemas...)
+        }
+    }
+    // Components.Responses
+    {
+        keys := getYAMLNodeKeys("components.responses")
+        if keys == nil {
+            return "", fmt.Errorf("failed to get components.responses keys")
+        }
+
+        for _, key := range keys {
+            ref := spec.Components.Responses[key]
+            schema, additionalSchemas, err := generateResponse(ref, key)
+            if err != nil {
+                return "", fmt.Errorf("failed to generate schema for %s: %w", key, err)
+            }
+            fileData.Schemas = append(fileData.Schemas, schema)
+            fileData.Schemas = append(fileData.Schemas, additionalSchemas...)
+        }
+    }
 
 	return applySchemaTemplate(fileData)
 }
-

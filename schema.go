@@ -8,7 +8,7 @@ import (
 // Doc represents a parsed OpenAPI 3.0 spec
 type Doc struct {
 	Raw  *yaml.Node
-	Spec openapi3.T
+	Spec *openapi3.T
 }
 
 // Schema represents a single schema to be generated
@@ -20,7 +20,7 @@ type Schema struct {
 	OmitEmpty   bool
 	Example     string
 	// Object
-	Properties []Schema
+	Properties []*Schema
 	// Enum
 	EnumValues []any
 }
@@ -28,7 +28,7 @@ type Schema struct {
 // FileData represents all structs for the generated Go file
 type FileData struct {
 	PackageName string
-	Schemas     []Schema
+	Schemas     []*Schema
 	Methods     []MethodInfo
 }
 
