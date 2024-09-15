@@ -23,40 +23,23 @@ type Schema struct {
 	Properties []*Schema
 	// Enum
 	EnumValues []any
+	// Parameter
+	In string
 }
 
 // FileData represents all structs for the generated Go file
 type FileData struct {
 	PackageName string
 	Schemas     []*Schema
-	Methods     []MethodInfo
+	Requests    []*Request
 }
 
-type ParameterInfo struct {
-	Name     string
-	Type     string
-	Required bool
-	In       string
-}
-
-type MethodInfo struct {
-	MethodName      string
-	ParamsStruct    string
-	Method          string
-	Path            string
-	ResponseType    string
-	HasBody         bool
-	RequestBody     string
-	Parameters      []ParameterInfo
-	QueryParams     []ParameterInfo
-	PathParams      []ParameterInfo
-	HeaderParams    []ParameterInfo
-	HasQueryParams  bool
-	HasPathParams   bool
-	HasHeaderParams bool
-}
-
-type ClientFileData struct {
-	PackageName string
-	Methods     []MethodInfo
+// Request represents a single request to be generated
+type Request struct {
+	Name       string
+	Path       string
+	Method     string
+	Parameters []*Schema
+	Body       *Schema
+	Response   *Schema
 }

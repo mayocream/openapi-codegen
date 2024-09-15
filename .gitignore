@@ -25,3 +25,5 @@ go.work.sum
 .env
 
 *.gen.go
+testdata/go.mod
+testdata/go.sum

@@ -16,3 +16,16 @@ func Test_generateComponents(t *testing.T) {
 		return
 	}
 }
+
+func Test_generateClient(t *testing.T) {
+	_, _, err := parseOpenAPISpec("testdata/openapi.yaml")
+	if err != nil {
+		t.Errorf("parseOpenAPISpec() error = %v", err)
+		return
+	}
+	_, err = generateClient(spec, "testdata")
+	if err != nil {
+		t.Errorf("generateClient() error = %v", err)
+		return
+	}
+}

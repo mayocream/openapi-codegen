@@ -14,20 +14,20 @@ import (
 //go:embed templates/schema.tmpl
 var schemaTplContent string
 
-var schemaTpl = template.Must(template.New("schema").Funcs(template.FuncMap{
-	"pascalCase": lo.PascalCase,
-	"goComment": func(name string, desc string) string {
-		desc = strings.ReplaceAll(desc, "\n", "\n// ")
-		return fmt.Sprintf("// %s %s", name, desc)
-	},
-}).Parse(schemaTplContent))
-
 //go:embed templates/client.tmpl
 var clientTplContent string
 
-var clientTpl = template.Must(template.New("client").Funcs(template.FuncMap{
-	"pascalCase": lo.PascalCase,
-}).Parse(clientTplContent))
+var (
+	funcMap = template.FuncMap{
+		"pascalCase": lo.PascalCase,
+		"goComment": func(name string, desc string) string {
+			desc = strings.ReplaceAll(desc, "\n", "\n// ")
+			return fmt.Sprintf("// %s %s", name, desc)
+		},
+	}
+	schemaTpl = template.Must(template.New("schema").Funcs(funcMap).Parse(schemaTplContent))
+	clientTpl = template.Must(template.New("client").Funcs(funcMap).Parse(clientTplContent))
+)
 
 // applySchemaTemplate Apply Go templates to generate code
 func applySchemaTemplate(data any) (string, error) {

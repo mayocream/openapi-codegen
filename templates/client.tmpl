@@ -3,83 +3,100 @@ package {{ .PackageName }}
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-resty/resty/v2"
 )
 
 type Client struct {
-	BaseURL string
 	client  *resty.Client
 }
 
 func NewClient(baseURL string) *Client {
 	return &Client{
-		BaseURL: baseURL,
-		client:  resty.New(),
+		client:  resty.New().SetBaseURL(baseURL),
 	}
 }
 
-{{ range .Methods }}
-{{ .ParamsStruct }}
-
-func (c *Client) {{ .MethodName }}(params {{ .MethodName }}Params) ({{ .ResponseType }}, error) {
+{{ range .Requests }}
+{{- if .Parameters }}
+// {{ .Name }}Params represents the parameters for the {{ .Name }} request
+type {{ .Name }}Params struct {
+	{{- range .Parameters }}
+	{{- if .Description }} {{ goComment .Name .Description }} {{- end }}
+	{{ .Name }} {{ .Type }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+	{{- end }}
+	{{- if .Body }}
+	RequestBody {{ .Body.Name }} `json:"-"`
+	{{- end }}
+}
+{{- end }}
+func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end }}{{ if .Body }}, body {{ .Body.Name }} {{ end }}) ({{ if .Response }}{{ .Response.Name }}, {{ end }}error) {
 	path := "{{ .Path }}"
-	{{- if .HasPathParams }}
-	// Replace path parameters
-	{{- range .PathParams }}
-	path = strings.Replace(path, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", params.{{ .Name }}), -1)
+
+	{{- if .Parameters }}
+	// Replace path parameters and prepare query parameters
+	queryParams := make(map[string]interface{})
+	{{- range .Parameters }}
+	{{- if eq .In "path" }}
+	path = strings.ReplaceAll(path, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
+	{{- else if eq .In "query" }}
+	{{- if .OmitEmpty }}
+	if params.{{ .Name }} != nil {
+		queryParams["{{ .Name }}"] = fmt.Sprintf("%v", params.{{ .Name }})
+	}
+	{{- end }}
+	{{- end }}
 	{{- end }}
 	{{- end }}
 
 	// Create request
 	req := c.client.R()
 
-	{{- if .HasQueryParams }}
-	// Add query parameters
-	{{- range .QueryParams }}
-	{{- if .Required }}
-	req.SetQueryParam("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name | pascalCase }}))
-	{{- else }}
-	if params.{{ .Name | pascalCase }} != nil {
-		req.SetQueryParam("{{ .Name }}", fmt.Sprintf("%v", *params.{{ .Name | pascalCase }}))
-	}
-	{{- end }}
-	{{- end }}
-	{{- end }}
+	{{- if .Parameters }}
+	// Set query parameters
+	req.SetQueryParams(queryParams)
 
-	{{- if .HasHeaderParams }}
 	// Set header parameters
-	{{- range .HeaderParams }}
-	{{- if .Required }}
-	req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
-	{{- else }}
+	{{- range .Parameters }}
+	{{- if eq .In "header" }}
+	{{- if .OmitEmpty }}
 	if params.{{ .Name }} != nil {
-		req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", *params.{{ .Name }}))
+		req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
 	}
+	{{- else }}
+	req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
+	{{- end }}
 	{{- end }}
 	{{- end }}
 	{{- end }}
 
-	{{- if .HasBody }}
+	{{- if .Body }}
 	// Set request body
-	req.SetBody(params.RequestBody)
+	req.SetBody(body)
 	{{- end }}
 
+	{{- if .Response }}
 	// Set response object
-	var result {{ .ResponseType }}
+	var result {{ .Response.Name }}
 	req.SetResult(&result)
+	{{- end }}
 
 	// Send request
 	resp, err := req.{{ .Method }}(c.BaseURL + path)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
+		return {{ if .Response }}{{ .Response.Name }}{}, {{ end }}fmt.Errorf("error sending request: %w", err)
 	}
 
 	// Check for successful status code
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode(), resp.String())
+		return {{ if .Response }}{{ .Response.Name }}{}, {{ end }}fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode(), resp.String())
 	}
 
+	{{- if .Response }}
 	return result, nil
+	{{- else }}
+	return nil
+	{{- end }}
 }
 {{ end }}
