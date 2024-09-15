@@ -100,8 +100,12 @@ func generateRequests(pathItem *openapi3.PathItem, path string) ([]*Request, err
 	var requests []*Request
 	var pathSchemas []*Schema
 
-	findParameter := func(name string) *openapi3.ParameterRef {
-		return spec.Components.Parameters[name]
+	findParameterByRef := func(name string) *openapi3.ParameterRef {
+		name = lo.LastOrEmpty(strings.Split(name, "/"))
+		if v, ok := spec.Components.Parameters[name]; ok {
+			return v
+		}
+		return nil
 	}
 
 	// Create path parameters
@@ -111,7 +115,7 @@ func generateRequests(pathItem *openapi3.PathItem, path string) ([]*Request, err
 			if param.Ref == "" {
 				continue
 			}
-			if p := findParameter(param.Ref); p != nil {
+			if p := findParameterByRef(param.Ref); p != nil {
 				schema, _, _ := generateSchema(p.Value.Schema, p.Value.Name)
                 schema.In = p.Value.In
 				pathSchemas = append(pathSchemas, schema)
@@ -137,7 +141,7 @@ func generateRequests(pathItem *openapi3.PathItem, path string) ([]*Request, err
                 if param.Ref == "" {
                     continue
                 }
-                if p := findParameter(param.Ref); p != nil {
+                if p := findParameterByRef(param.Ref); p != nil {
                     schema, _, _ := generateSchema(p.Value.Schema, p.Value.Name)
                     schema.In = p.Value.In
                     request.Parameters = append(request.Parameters, schema)

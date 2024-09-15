@@ -2,10 +2,11 @@ package {{ .PackageName }}
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/samber/lo"
 )
 
 type Client struct {
@@ -24,10 +25,12 @@ func NewClient(baseURL string) *Client {
 type {{ .Name }}Params struct {
 	{{- range .Parameters }}
 	{{- if .Description }} {{ goComment .Name .Description }} {{- end }}
+	{{- if eq .Type "enum" }}
+	// {{ .Name }} enum
+	{{ .Name }} string `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+	{{- else }}
 	{{ .Name }} {{ .Type }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
 	{{- end }}
-	{{- if .Body }}
-	RequestBody {{ .Body.Name }} `json:"-"`
 	{{- end }}
 }
 {{- end }}
@@ -36,16 +39,14 @@ func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end 
 
 	{{- if .Parameters }}
 	// Replace path parameters and prepare query parameters
-	queryParams := make(map[string]interface{})
+	queryParams := make(map[string]string)
 	{{- range .Parameters }}
 	{{- if eq .In "path" }}
 	path = strings.ReplaceAll(path, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
 	{{- else if eq .In "query" }}
-	{{- if .OmitEmpty }}
-	if params.{{ .Name }} != nil {
+	if lo.IsNotEmpty(params.{{ .Name }}) {
 		queryParams["{{ .Name }}"] = fmt.Sprintf("%v", params.{{ .Name }})
 	}
-	{{- end }}
 	{{- end }}
 	{{- end }}
 	{{- end }}
@@ -57,16 +58,12 @@ func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end 
 	// Set query parameters
 	req.SetQueryParams(queryParams)
 
-	// Set header parameters
 	{{- range .Parameters }}
 	{{- if eq .In "header" }}
-	{{- if .OmitEmpty }}
-	if params.{{ .Name }} != nil {
+	// Set header parameters
+	if lo.IsNotEmpty(params.{{ .Name }}) {
 		req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
 	}
-	{{- else }}
-	req.SetHeader("{{ .Name }}", fmt.Sprintf("%v", params.{{ .Name }}))
-	{{- end }}
 	{{- end }}
 	{{- end }}
 	{{- end }}
