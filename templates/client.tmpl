@@ -83,7 +83,7 @@ func (c *Client) {{ .Name }}({{ if .Parameters }}params {{ .Name }}Params{{ end 
 	{{- end }}
 
 	// Send request
-	resp, err := req.{{ .Method }}(c.BaseURL + path)
+	resp, err := req.{{ .Method }}(path)
 	if err != nil {
 		return {{ if .Response }}{{ .Response.Name }}{}, {{ end }}fmt.Errorf("error sending request: %w", err)
 	}

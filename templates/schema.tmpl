@@ -39,6 +39,9 @@ const (
     } `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
 {{- else if eq .Type "array" -}}
     {{ .Name }} []{{ .ItemType }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
+{{- else if eq .Type "enum" -}}
+    // {{ .Name }} enum
+    {{ .Name }} string `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
 {{- else -}}
     {{ .Name }} {{ .Type }} `json:"{{ .JSONName }}{{ if .OmitEmpty }},omitempty{{ end }}"`
 {{- end }}

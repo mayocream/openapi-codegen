@@ -198,6 +198,11 @@ func generateComponents(spec *openapi3.T, packageName string) (string, error) {
 		}
 	}
 
+	// Remove duplicates
+	fileData.Schemas = lo.UniqBy(fileData.Schemas, func(s *Schema) string {
+		return s.Name
+	})
+
 	return applySchemaTemplate(fileData)
 }
 
